@@ -10,6 +10,8 @@ import androidx.annotation.NonNull;
 import java.util.Map;
 import java.util.Objects;
 
+import com.appsflyer.AppsFlyerLib;
+
 public class AppsflyerBasicApp extends Application {
     public static final String LOG_TAG = "AppsFlyerOneLinkSimApp";
     public static final String DL_ATTRS = "dl_attrs";
@@ -17,5 +19,10 @@ public class AppsflyerBasicApp extends Application {
 
     public void onCreate() {
         super.onCreate();
+
+        // AppsFlyer SDK Integration
+        AppsFlyerLib.getInstance().setDebugLog(true);
+        AppsFlyerLib.getInstance().init("sQ84wpdxRTR4RMCaE9YqS4", null, this);
+        AppsFlyerLib.getInstance().start(this);
     }
 }
