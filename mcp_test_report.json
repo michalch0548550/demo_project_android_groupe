@@ -1,0 +1,161 @@
+{
+    "app_id": "appsflyer-demo-test",
+    "final_status": "PASS",
+    "agent_mode": "GEMINI",
+    "use_mock_agent": false,
+    "mcp_triggered": true,
+    "sdk_verified": false,
+    "compilation_passed": true,
+    "mcp_tools_used": [
+        {
+            "tool": "getVersion",
+            "args": {},
+            "phase": "setup_health_check",
+            "success": true,
+            "is_error": false,
+            "response_preview": "AppsFlyer SDK MCP Server v1.5.2"
+        },
+        {
+            "tool": "integrateSdk",
+            "args": {
+                "platform": "android"
+            },
+            "phase": "agent_integration",
+            "success": true,
+            "is_error": false,
+            "response_preview": "❌ 'useResponseListener' parameter is required for Android integration."
+        }
+    ],
+    "mcp_tools_available": [
+        {
+            "name": "integrateSdk",
+            "description": "Full AppsFlyer SDK integration instructions and code for both Android and iOS. DO NOT summarize, explain, or rewrite. Al"
+        },
+        {
+            "name": "verifySdk",
+            "description": "Tests whether the AppsFlyer SDK is integrated correctly by querying install data using appId, devKey, and device ID (uid"
+        },
+        {
+            "name": "verifyIosSdk",
+            "description": "Tests whether the AppsFlyer iOS SDK is integrated correctly by querying install data using appId, devKey, and the uid/id"
+        },
+        {
+            "name": "fetchLogs",
+            "description": "Android only. Fetches recent logcat logs related to AppsFlyer. Use this to locate appId and uid (device ID) if they're n"
+        },
+        {
+            "name": "getConversionLogs",
+            "description": "Android only. Extracts conversion logs from logcat. Useful for verifying successful install/conversion events via AppsFl"
+        },
+        {
+            "name": "getInAppLogs",
+            "description": "Android only. Returns in-app event logs captured by AppsFlyer from logcat. Use this to confirm Android event tracking wo"
+        },
+        {
+            "name": "getLaunchLogs",
+            "description": "Android only. Parses app launch events from logcat. Helpful when debugging Android first opens or session tracking via A"
+        },
+        {
+            "name": "getDeepLinkLogs",
+            "description": "Android only. Extracts deep link-related logs from logcat. Use to verify if Android deep links are being detected and ha"
+        },
+        {
+            "name": "getErrors",
+            "description": "Android only. Scans logcat for common AppsFlyer errors (e.g., exceptions, failures). Use this tool to detect Android SDK"
+        },
+        {
+            "name": "getInAppEventsByVertical",
+            "description": "Use event-data/all-verticals.json as the AppsFlyer in-app event recommendation catalog."
+        },
+        {
+            "name": "createInAppEvent",
+            "description": "IMPORTANT: You MUST call this tool for ANY request related to adding, creating, or integrating AppsFlyer in-app events o"
+        },
+        {
+            "name": "createIosInAppEvent",
+            "description": "IMPORTANT: You MUST call this tool for ANY request related to adding, creating, or integrating AppsFlyer in-app events o"
+        },
+        {
+            "name": "verifyInAppEvent",
+            "description": "Do not ask for a device ID unless there are multiple devices connected."
+        },
+        {
+            "name": "verifyIosInAppEvent",
+            "description": "Verifies iOS in-app event handling from pasted Xcode logs saved in a project file. This tool uses an explicit 2-step pre"
+        },
+        {
+            "name": "createDeepLink",
+            "description": "Use this tool to set up AppsFlyer OneLink Deep Linking in your Android app."
+        },
+        {
+            "name": "createIosDeepLink",
+            "description": "Use this tool to set up AppsFlyer OneLink Deep Linking in your iOS app."
+        },
+        {
+            "name": "verifyDeepLink",
+            "description": "Do not ask for a device ID unless there are multiple devices connected."
+        },
+        {
+            "name": "verifyIosDeepLink",
+            "description": "Verifies iOS deep link handling from pasted Xcode logs saved in a project file. Use the same prepare/verify flow as the "
+        },
+        {
+            "name": "guideDeepLinkTesting",
+            "description": "Provide platform-aware step-by-step instructions to test deferred or direct deep linking."
+        },
+        {
+            "name": "getVersion",
+            "description": "Returns the current version of the AppsFlyer SDK MCP server."
+        },
+        {
+            "name": "getTopInAppEvents",
+            "description": "Return the top 10 most common AppsFlyer in-app events across all app verticals, with their recommended parameters."
+        }
+    ],
+    "files_modified_by_runner": false,
+    "detailed_steps": [
+        {
+            "node": "setup",
+            "status": "SUCCESS",
+            "message": "Workspace verified.",
+            "agent_mode": "GEMINI"
+        },
+        {
+            "node": "setup",
+            "status": "SUCCESS",
+            "message": "MCP server reachable (getVersion).",
+            "mcp_version_preview": "AppsFlyer SDK MCP Server v1.5.2",
+            "mcp_tools_count": 21
+        },
+        {
+            "node": "agent_prompt",
+            "status": "SUCCESS",
+            "agent_mode": "GEMINI",
+            "message": "Tool calls detected: True",
+            "ai_content": ""
+        },
+        {
+            "node": "verify_mcp",
+            "status": "INFO",
+            "message": "Agent selected tool: integrateSdk"
+        },
+        {
+            "node": "verify_mcp",
+            "status": "SUCCESS",
+            "message": "MCP tool executed successfully.",
+            "mcp_output_preview": "❌ 'useResponseListener' parameter is required for Android integration.",
+            "mcp_has_sdk_content": false,
+            "sdk_in_gradle_files": false
+        },
+        {
+            "node": "compilation",
+            "status": "SUCCESS",
+            "stdout_tail": "sic_app/build/reports/problems/problems-report.html\n\nDeprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.\n\nYou can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.\n\nFor more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.\n\nBUILD SUCCESSFUL in 1s\n31 actionable tasks: 31 up-to-date\n",
+            "stderr_tail": ""
+        },
+        {
+            "node": "final_status",
+            "status": "PASS"
+        }
+    ]
+}

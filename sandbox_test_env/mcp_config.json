@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "appsflyer-sdk-installer": {
+      "command": "node",
+      "args": [
+        "index.js"
+      ]
+    }
+  }
+}
