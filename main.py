@@ -29,8 +29,6 @@ from mcp.client.stdio import stdio_client, get_default_environment
 from apply_sdk_changes import apply_sdk_changes
 from PromptsAgent import get_agent_prompt
 
-
-
 load_dotenv()
 
 
@@ -208,10 +206,7 @@ async def _call_mcp_tool_async(tool_name: str, args: dict) -> dict:
                 "is_error": bool(result.isError),
 
             }
-
-
-
-
+\
 
 def call_mcp(tool_name: str, args: dict) -> dict:
 

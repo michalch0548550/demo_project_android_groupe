@@ -13,8 +13,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 DEFAULT_GOAL = "Install AppsFlyer's SDK in my app using their MCP"
 
 llm = ChatGoogleGenerativeAI(
-    model="gemma-4-26b-a4b-it",
-    temperature=0.4,
+    # model="gemma-4-26b-a4b-it",
+    model="gemini-2.5-flash",
+    # temperature=0.4,
+    temperature=0.1,
     google_api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
 )
 

@@ -2,8 +2,8 @@
     "app_id": "appsflyer-demo-test",
     "final_status": "FAIL",
     "agent_mode": "GEMINI",
-    "mcp_triggered": true,
-    "sdk_verified": true,
+    "mcp_triggered": false,
+    "sdk_verified": false,
     "compilation_passed": false,
     "mcp_tools_used": [
         {
@@ -13,17 +13,6 @@
             "success": true,
             "is_error": false,
             "response_preview": "AppsFlyer SDK MCP Server v1.5.2"
-        },
-        {
-            "tool": "integrateSdk",
-            "args": {
-                "useResponseListener": false,
-                "platform": "android"
-            },
-            "phase": "agent_integration",
-            "success": true,
-            "is_error": false,
-            "response_preview": "Prefer applying the following integration steps directly in the user's Android project files whenever possible, instead of leaving copy/paste-only guidance.\n\n⚠️ Use exactly as written below. Do not mo"
         }
     ],
     "mcp_tools_available": [
@@ -112,12 +101,8 @@
             "description": "Return the top 10 most common AppsFlyer in-app events across all app verticals, with their recommended parameters."
         }
     ],
-    "files_modified_by_runner": true,
-    "applied_files": [
-        "app/build.gradle",
-        "app/src/main/AndroidManifest.xml",
-        "app/src/main/java/com/appsflyer/onelink/appsflyeronelinkbasicapp/AppsflyerBasicApp.java"
-    ],
+    "files_modified_by_runner": false,
+    "applied_files": [],
     "detailed_steps": [
         {
             "node": "setup",
@@ -134,38 +119,19 @@
         },
         {
             "node": "agent_prompt",
-            "status": "SUCCESS",
-            "agent_mode": "GEMINI",
-            "message": "Tool calls detected: True",
-            "ai_content": ""
-        },
-        {
-            "node": "verify_mcp",
-            "status": "INFO",
-            "message": "Agent selected tool: integrateSdk"
-        },
-        {
-            "node": "verify_mcp",
-            "status": "SUCCESS",
-            "message": "MCP tool executed successfully.",
-            "mcp_output_preview": "Prefer applying the following integration steps directly in the user's Android project files whenever possible, instead of leaving copy/paste-only guidance.\n\n⚠️ Use exactly as written below. Do not modify.\nApply these changes directly in the user's Android project files (do not ask the user to copy/paste).\n\n\n**1. Declare repositories**  \nIn the **Project** `build.gradle` file, declare the `mavenCentral()` repository:\n\n```gradle\nrepositories {\n  mavenCentral()\n}\n```\n\n**2. Add Dependencies**  \nIn ",
-            "mcp_response_length": 1892
-        },
-        {
-            "node": "apply_sdk",
-            "status": "SUCCESS",
-            "message": "Applied SDK integration to 3 file(s).",
-            "applied_files": [
-                "app/build.gradle",
-                "app/src/main/AndroidManifest.xml",
-                "app/src/main/java/com/appsflyer/onelink/appsflyeronelinkbasicapp/AppsflyerBasicApp.java"
-            ]
-        },
-        {
-            "node": "compilation",
             "status": "FAIL",
-            "stdout_tail": "ing_demo/basic_app/build/reports/problems/problems-report.html\n\nDeprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.\n\nYou can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.\n\nFor more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.\n27 actionable tasks: 14 executed, 13 up-to-date\n",
-            "stderr_tail": "ppsflyer\\onelink\\appsflyeronelinkbasicapp\\AppsflyerBasicApp.java:26: error: incompatible types: AppsflyerBasicApp cannot be converted to AppsFlyerRequestListener\n          AppsFlyerLib.getInstance().start(this);\n                                           ^\n  Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output\n  1 error\n\n* Try:\n> Check your code and dependencies to fix the compilation error(s)\n> Run with --scan to get full insights.\n\nBUILD FAILED in 6m 59s\n"
+            "agent_mode": "GEMINI",
+            "message": "Tool calls detected: False",
+            "prompt_used": "Integrate AppsFlyer's Android SDK into the project located at `C:\\Users\\user\\Documents\\appsflyer_mcp_testing_demo\\basic_app`.",
+            "ai_content": [
+                {
+                    "type": "text",
+                    "text": "Do you want to use a response listener?",
+                    "extras": {
+                        "signature": "CskLAQw51sfWsVu1w/ToMSq1k0vQXtK104tkqDl76gvzHGNv630a1Y+CQOyhGxMncNUWIhmIxPicdkN+jEFwHAbbYsBnRj8vsBzWWDH2x/yq11xu5oPIe6JkKG5rymggOpuTNV3EBPi+vXrDZecP0m3BJP2WXEVcmCsB7kupGqf6aNAozuZFTXoKSkBlw3YjnDXEpu5kGoJQ5Mqar+SWoYu2b6+3M82r+mVC5P6G8TzNPsAaMmcmjzHYnQtFemiDeZ3MpUBRzAu6JRs1cZR7fgXp/3VADlrWU3uIF/fCWiJQbgtz6oSaIGDAdtKJGIpK8RMA51OgP7m/0fNhktrGC/cHvKsSTknYlcURXFGwxxihHorGaAnPIbWJCDjtKA0f/5m+9+EV1FeMkWm4OsKnKB9CLIaaUkEPX38dKhNFBc5rdczUaT2kcJujHUs7uXUtdLz4feeVHBP98+Kgrms4iTdgB9/lvufLp8EuvJVfza3nYTOwwZlPVg2hfa3ymFUB/D6PG/DTRgMecOQ8YBfMYEWdy01QI8/jH3BTO86duyaGikIJBHF9Y1GcszAw2U2wjxMFKhuXCPQieblroB7Y06x3Xr2LWZOIU6d0L2h/7SsnWGB1shn8krjK5qcqJdTnfKlM7GZphrCjz5R0VZyoJN/TAcWOcww4dmV8Tt5tX6ZQ1SvGS1NXmLDuvGsSJdfRkf4h2K7baiHGghq4lvZ9kLhbJ9FnlejcAPxA0LxN2u8N8Yjk2nepSGOPwEWmOGPLv0Bcmx20pVQYx2uz75lZzkc1nYo3S9PnR1CPfX/ap9sMuO6BiYwGAtcO/hwNsqQK2Vbbo0X7APcd8oWQRFqPoBICV7IEa54A+KEGPaYKrvH9oIzwPJN6hDOVvQrXguhd9XP/IXyuirdsqy98x5Tp1UN4bJ1MmDGrAVl5E/eUkF7tv6r5PWufTYy/gzQYlf5t++04hbDULvjr/vg8/nteoCpHc5pzD4mHo1gWerEcVa3dWJRbVryji7Q85bOGW421BJVeGwGvU516rarfEce3B6HcrdZ3OGQRrSJWYaybTIxwjVI52GlbBMCMaZPp2OTSlPcG8qsAV50fD4Rn+HD8XtHEfzv5+ialfAurDKu/eRsh7VOUqH5ED7zrVDblg1hRhK18qDQfr1tTUkp/kUNEtps98KhRL4sBlVunyVuKbHD3fYRYOmqZ9r6Jj3YJut9J0pE2Dim3pU63d11hITpTlP5B3uAenwVofhccEdiw5UjMhOjOfgrRreWUeIEZQMoxXWXh74jA09R0UW13Ypf0TYptHVnEHGWR5mKRSJkCZR3JFfzGzaJ8Y7kJ4/U65uwTXHDzFWJpqFxATh+3Aw3UTY4U6aqLHoMQ064xtoSwdnOG7HhIjh96PqsYZmPHx2MsC6gK1X/zbfkaJt703D1MqsFjQzdto3mCJ+/B0JMrKttbjht+T+KBwEa2/Jz1J4yCGZ+pNreEHVNiOofzPqXdrPP8SFIuo98QVVvwwKchgA2VXew6mo77aBe8D9okJQWWsfgJzORMJw0jTWpWmHUFYazPR5GvFw5uZpSt14Ypi7wuAwIciIZjs6bfQqGH+NJhFemtXWAp3q6HuzZmJSr2z0qWBGhvYbZy93rkBweBpWnFS1iEak1Ob9WFR7EKaCFiNyjsw6WnLU8U0Y7uIELD9bG+b2d+meTSue1EQxCOcghRPDhl5tHqM2tfmUDa8pW5G/JO1AVPLXcnslhD7MtaIxABWGFwFyU+iplUwxsozJ2+90zK+LMJams1tXz3GvgzVloWMwB9GuK8PArKQlYwxzOUgzrOvVtV6uiwubwS7sb/YEUclu4iCZD3o8xPkJtDMbfRhlMTWmt52gDLWawTnQHuWG5cRlC46pKM4yBFm+7SQr7w0LsVAA+ye5PTTGFQaN7g7UJ/jDQiazpixTGQw01PKMaTB9o6FqVSjHL8lpis/ZccG5JWikRn0g4="
+                    }
+                }
+            ]
         },
         {
             "node": "final_status",
