@@ -12,12 +12,7 @@ import subprocess
 
 from typing import TypedDict, List, Dict, Any, Annotated
 
-from responseAgent import answer_question_node
 
-from responseAgent import classify_question  # אם תרצי להשתמש בו לזיהוי
-
-from responseAgent import build_prompt_with_answers
-from responseAgent import build_prompt_with_answers
 
 from langgraph.graph import StateGraph, END
 
@@ -320,11 +315,6 @@ class AgentTestState(TypedDict):
 
     report_path: str
 
-    incoming_question: str
-
-    question_rounds: int
-
-    installation_answers: Annotated[List[Dict[str, Any]], operator.add]
 
 
 # =========================
@@ -439,70 +429,44 @@ def setup_environment(state: AgentTestState):
 
 
 
-# def run_agent_prompt(state: AgentTestState):
-
-#     print("[2] צומת: Run Agent Prompt")
-
-#     logs = []
-
-
-
-#     prompt = get_agent_prompt(state["app_path"])
-
-
-
-#     resp = invoke_agent(prompt)
-
-#     has_tool_call = bool(resp.tool_calls)
-
-
-
-#     logs.append({
-
-#         "node": "agent_prompt",
-
-#         "status": "SUCCESS" if has_tool_call else "FAIL",
-
-#         "agent_mode": "GEMINI",
-
-#         "message": f"Tool calls detected: {has_tool_call}",
-
-#         "prompt_used": prompt,
-
-#         "ai_content": resp.content,
-
-#     })
-
-
-
-#     return {"last_agent_message": resp, "nodes_logs": logs, "agent_mode": "GEMINI"}
 def run_agent_prompt(state: AgentTestState):
+
     print("[2] צומת: Run Agent Prompt")
+
     logs = []
-    base_prompt = get_agent_prompt(state["app_path"])
-    prompt = build_prompt_with_answers(base_prompt, state.get("installation_answers", []))
+
+
+
+    prompt = get_agent_prompt(state["app_path"])
+
+
+
     resp = invoke_agent(prompt)
+
     has_tool_call = bool(resp.tool_calls)
-    # חילוץ הטקסט שה-LLM החזיר (אם אין קריאת כלי)
-    raw = resp.content if hasattr(resp, "content") else resp
-    if isinstance(raw, list):
-        raw = " ".join(getattr(x, "content", str(x)) for x in raw)
-    content = str(raw or "").strip()
-    has_question = (not has_tool_call) and bool(content)
+
+
+
     logs.append({
+
         "node": "agent_prompt",
-        "status": "SUCCESS" if (has_tool_call or has_question) else "FAIL",
+
+        "status": "SUCCESS" if has_tool_call else "FAIL",
+
         "agent_mode": "GEMINI",
-        "message": f"Tool calls: {has_tool_call} | Question detected: {has_question}",
+
+        "message": f"Tool calls detected: {has_tool_call}",
+
         "prompt_used": prompt,
+
         "ai_content": resp.content,
+
     })
-    return {
-        "last_agent_message": resp,
-        "incoming_question": content if has_question else "",
-        "nodes_logs": logs,
-        "agent_mode": "GEMINI",
-    }
+
+
+
+    return {"last_agent_message": resp, "nodes_logs": logs, "agent_mode": "GEMINI"}
+
 
 
 
@@ -875,21 +839,7 @@ def route_after_agent(state):
 
     msg = state.get("last_agent_message")
 
-    if msg and msg.tool_calls:
-
-        return "verify_mcp_activation"
-
-    if state.get("incoming_question", "").strip():
-
-        return "answer_question"
-
-    return "fail_node"
-
-
-
-def route_after_answer(state):
-
-    return "fail_node" if state.get("test_status") == "FAIL" else "run_agent_prompt"
+    return "verify_mcp_activation" if (msg and msg.tool_calls) else "fail_node"
 
 
 
@@ -925,8 +875,6 @@ workflow.add_node("setup_environment", setup_environment)
 
 workflow.add_node("run_agent_prompt", run_agent_prompt)
 
-workflow.add_node("answer_question", answer_question_node)
-
 workflow.add_node("verify_mcp_activation", verify_mcp_activation)
 
 workflow.add_node("apply_sdk_changes", apply_sdk_changes_node)
@@ -948,8 +896,6 @@ workflow.set_entry_point("setup_environment")
 workflow.add_conditional_edges("setup_environment", route_after_setup)
 
 workflow.add_conditional_edges("run_agent_prompt", route_after_agent)
-
-workflow.add_conditional_edges("answer_question", route_after_answer)
 
 workflow.add_conditional_edges("verify_mcp_activation", route_after_mcp)
 
