@@ -206,7 +206,7 @@ async def _call_mcp_tool_async(tool_name: str, args: dict) -> dict:
                 "is_error": bool(result.isError),
 
             }
-\
+
 
 def call_mcp(tool_name: str, args: dict) -> dict:
 
