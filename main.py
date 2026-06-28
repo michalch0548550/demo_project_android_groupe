@@ -17,7 +17,8 @@ from responseAgent import answer_question_node
 from responseAgent import classify_question  # אם תרצי להשתמש בו לזיהוי
 
 from responseAgent import build_prompt_with_answers
-from responseAgent import build_prompt_with_answers
+
+from responseAgent import classify_agent_response, MAX_QUESTION_ROUNDS
 
 from langgraph.graph import StateGraph, END
 
@@ -326,6 +327,10 @@ class AgentTestState(TypedDict):
 
     installation_answers: Annotated[List[Dict[str, Any]], operator.add]
 
+    stream_decision: str
+
+    agent_base_prompt: str
+
 
 # =========================
 
@@ -439,70 +444,134 @@ def setup_environment(state: AgentTestState):
 
 
 
-# def run_agent_prompt(state: AgentTestState):
+def stream_listen(state: AgentTestState):
+    """STREAM node: the ONLY node that talks to the installation LLM.
 
-#     print("[2] צומת: Run Agent Prompt")
-
-#     logs = []
-
-
-
-#     prompt = get_agent_prompt(state["app_path"])
-
-
-
-#     resp = invoke_agent(prompt)
-
-#     has_tool_call = bool(resp.tool_calls)
-
-
-
-#     logs.append({
-
-#         "node": "agent_prompt",
-
-#         "status": "SUCCESS" if has_tool_call else "FAIL",
-
-#         "agent_mode": "GEMINI",
-
-#         "message": f"Tool calls detected: {has_tool_call}",
-
-#         "prompt_used": prompt,
-
-#         "ai_content": resp.content,
-
-#     })
-
-
-
-#     return {"last_agent_message": resp, "nodes_logs": logs, "agent_mode": "GEMINI"}
-def run_agent_prompt(state: AgentTestState):
-    print("[2] צומת: Run Agent Prompt")
+    Streams the agent's reply chunk-by-chunk, then routes:
+      - tool call(s)        -> run_agent_prompt
+      - SUCCESS text        -> run_agent_prompt
+      - FAIL text           -> fail_node
+      - technical QUESTION  -> answer_question (max MAX_QUESTION_ROUNDS, else fail_node)
+    """
+    print("[2] צומת: Stream Listen (LLM radar)")
     logs = []
-    base_prompt = get_agent_prompt(state["app_path"])
+
+    question_rounds = state.get("question_rounds", 0)
+
+    base_prompt = state.get("agent_base_prompt") or get_agent_prompt(state["app_path"])
     prompt = build_prompt_with_answers(base_prompt, state.get("installation_answers", []))
-    resp = invoke_agent(prompt)
-    has_tool_call = bool(resp.tool_calls)
-    # חילוץ הטקסט שה-LLM החזיר (אם אין קריאת כלי)
-    raw = resp.content if hasattr(resp, "content") else resp
+
+    resp = None
+    for chunk in llm_with_tools.stream(prompt):
+        resp = chunk if resp is None else resp + chunk
+
+    if resp is None:
+        logs.append({
+            "node": "stream_listen",
+            "status": "FAIL",
+            "reason": "No response streamed from the LLM.",
+        })
+        return {
+            "nodes_logs": logs,
+            "agent_base_prompt": base_prompt,
+            "test_status": "FAIL",
+            "stream_decision": "fail_node",
+        }
+
+    raw = resp.content
     if isinstance(raw, list):
-        raw = " ".join(getattr(x, "content", str(x)) for x in raw)
-    content = str(raw or "").strip()
-    has_question = (not has_tool_call) and bool(content)
+        raw = " ".join(getattr(x, "text", str(x)) for x in raw)
+    agent_text = str(raw or "").strip()
+    has_tool_call = bool(getattr(resp, "tool_calls", None))
+
+    if has_tool_call:
+        logs.append({
+            "node": "stream_listen",
+            "status": "SUCCESS",
+            "message": "Agent returned tool call(s); routing to run_agent_prompt.",
+            "tool_calls": [t.get("name") for t in resp.tool_calls],
+            "ai_content_preview": agent_text[:200],
+        })
+        return {
+            "last_agent_message": resp,
+            "agent_base_prompt": base_prompt,
+            "nodes_logs": logs,
+            "stream_decision": "run_agent_prompt",
+        }
+
+    decision = classify_agent_response(state, agent_text)
+    label = decision["label"]
+    nxt = decision["next"]
+
+    if (label == "QUESTION" or nxt == "answer_question") and question_rounds >= MAX_QUESTION_ROUNDS:
+        logs.append({
+            "node": "stream_listen",
+            "status": "FAIL",
+            "reason": f"Exceeded max question rounds ({MAX_QUESTION_ROUNDS}).",
+            "question_rounds": question_rounds,
+            "classifier": decision,
+        })
+        return {
+            "last_agent_message": resp,
+            "agent_base_prompt": base_prompt,
+            "nodes_logs": logs,
+            "test_status": "FAIL",
+            "stream_decision": "fail_node",
+        }
+
     logs.append({
-        "node": "agent_prompt",
-        "status": "SUCCESS" if (has_tool_call or has_question) else "FAIL",
-        "agent_mode": "GEMINI",
-        "message": f"Tool calls: {has_tool_call} | Question detected: {has_question}",
-        "prompt_used": prompt,
-        "ai_content": resp.content,
+        "node": "stream_listen",
+        "status": "INFO",
+        "message": f"Classified agent message as {label} -> {nxt}.",
+        "classifier_label": label,
+        "classifier_next": nxt,
+        "classifier_reason": decision.get("reason", ""),
+        "ai_content_preview": agent_text[:200],
     })
-    return {
+
+    result = {
         "last_agent_message": resp,
-        "incoming_question": content if has_question else "",
+        "agent_base_prompt": base_prompt,
         "nodes_logs": logs,
-        "agent_mode": "GEMINI",
+        "stream_decision": nxt,
     }
+    if label == "FAIL" or nxt == "fail_node":
+        result["test_status"] = "FAIL"
+    if label == "QUESTION" or nxt == "answer_question":
+        result["incoming_question"] = decision.get("question") or agent_text
+
+    return result
+
+
+def run_agent_prompt(state: AgentTestState):
+
+    print("[2c] צומת: Run Agent Prompt (verify tool calls only)")
+
+    logs = []
+
+    msg = state.get("last_agent_message")
+
+    has_tool_call = bool(getattr(msg, "tool_calls", None))
+
+    logs.append({
+
+        "node": "agent_prompt",
+
+        "status": "SUCCESS" if has_tool_call else "FAIL",
+
+        "agent_mode": "GEMINI",
+
+        "message": f"Tool calls detected: {has_tool_call}",
+
+        "ai_content": getattr(msg, "content", None),
+
+    })
+
+    if not has_tool_call:
+
+        return {"nodes_logs": logs, "test_status": "FAIL"}
+
+    return {"nodes_logs": logs}
 
 
 
@@ -867,7 +936,12 @@ def print_mcp_tools_summary(final_result: dict) -> None:
 
 def route_after_setup(state):
 
-    return "run_agent_prompt" if state.get("test_status") != "FAIL" else "fail_node"
+    return "stream_listen" if state.get("test_status") != "FAIL" else "fail_node"
+
+
+def route_after_stream(state):
+
+    return state.get("stream_decision", "fail_node")
 
 
 
@@ -875,13 +949,9 @@ def route_after_agent(state):
 
     msg = state.get("last_agent_message")
 
-    if msg and msg.tool_calls:
+    if msg and getattr(msg, "tool_calls", None):
 
         return "verify_mcp_activation"
-
-    if state.get("incoming_question", "").strip():
-
-        return "answer_question"
 
     return "fail_node"
 
@@ -889,7 +959,7 @@ def route_after_agent(state):
 
 def route_after_answer(state):
 
-    return "fail_node" if state.get("test_status") == "FAIL" else "run_agent_prompt"
+    return "fail_node" if state.get("test_status") == "FAIL" else "stream_listen"
 
 
 
@@ -923,6 +993,8 @@ workflow = StateGraph(AgentTestState)
 
 workflow.add_node("setup_environment", setup_environment)
 
+workflow.add_node("stream_listen", stream_listen)
+
 workflow.add_node("run_agent_prompt", run_agent_prompt)
 
 workflow.add_node("answer_question", answer_question_node)
@@ -946,6 +1018,8 @@ workflow.set_entry_point("setup_environment")
 
 
 workflow.add_conditional_edges("setup_environment", route_after_setup)
+
+workflow.add_conditional_edges("stream_listen", route_after_stream)
 
 workflow.add_conditional_edges("run_agent_prompt", route_after_agent)
 

@@ -1,8 +1,8 @@
 package com.appsflyer.onelink.appsflyeronelinkbasicapp;
 
 import android.app.Application;
-import com.appsflyer.AppsFlyerLib;
 
+import com.appsflyer.AppsFlyerLib;
 import java.util.Map;
 
 public class AppsflyerBasicApp extends Application {
@@ -14,7 +14,6 @@ public class AppsflyerBasicApp extends Application {
     public void onCreate() {
         super.onCreate();
 
-        // AppsFlyer SDK integration
         AppsFlyerLib.getInstance().setDebugLog(true);
         AppsFlyerLib.getInstance().init("sQ84wpdxRTR4RMCaE9YqS4", null, this);
         AppsFlyerLib.getInstance().start(this);

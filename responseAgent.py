@@ -17,6 +17,7 @@ Fixed developer decisions for this project:
 """
 import os
 import re
+import json
 from typing import Any, Dict, List, Optional
 
 from langchain_core.prompts import PromptTemplate
@@ -88,6 +89,130 @@ def classify_question(question: str) -> str:
     return "general"
 
 
+VALID_LABEL = {"SUCCESS", "FAIL", "QUESTION"}
+VALID_NEXT = {"run_agent_prompt", "fail_node", "answer_question"}
+LABEL_TO_NEXT = {
+    "SUCCESS": "run_agent_prompt",
+    "FAIL": "fail_node",
+    "QUESTION": "answer_question",
+}
+
+CLASSIFY_PROMPT = PromptTemplate.from_template(
+    "You are a strict classifier inside an automated AppsFlyer SDK installation pipeline.\n"
+    "An installation agent (another LLM) is trying to install the AppsFlyer Android SDK.\n"
+    "Read its latest message and decide what the pipeline should do next.\n\n"
+    "Labels:\n"
+    "- SUCCESS: the agent says it finished / completed the SDK installation.\n"
+    "- FAIL: the agent says it could NOT install the SDK / gave up / hit an unrecoverable error.\n"
+    "- QUESTION: the agent is asking the developer ANY technical question it needs answered to continue.\n\n"
+    "Routing (the 'next' node):\n"
+    "- SUCCESS -> run_agent_prompt\n"
+    "- FAIL -> fail_node\n"
+    "- QUESTION -> answer_question\n\n"
+    "If the message is ambiguous or unexpected, use the STATE snapshot below to pick the safest next step, "
+    "and still return one of the allowed 'next' values.\n"
+    "Allowed next values: run_agent_prompt, fail_node, answer_question.\n\n"
+    "Agent message:\n{agent_text}\n\n"
+    "STATE snapshot (JSON):\n{state_snapshot}\n\n"
+    "Return ONLY a JSON object (no markdown, no extra text) with exactly these keys:\n"
+    '{{"label": "SUCCESS|FAIL|QUESTION", "question": "<the question text or empty>", '
+    '"next": "run_agent_prompt|fail_node|answer_question", "reason": "<short reason>"}}\n'
+)
+
+
+def _state_snapshot(state: dict) -> str:
+    """Compact, JSON-safe view of the run so the classifier can decide edge cases."""
+    msg = state.get("last_agent_message")
+    snapshot = {
+        "mcp_triggered": state.get("mcp_triggered", False),
+        "question_rounds": state.get("question_rounds", 0),
+        "installation_answers_count": len(state.get("installation_answers", []) or []),
+        "files_modified": state.get("files_modified", False),
+        "last_message_had_tool_calls": bool(getattr(msg, "tool_calls", None)),
+    }
+    return json.dumps(snapshot, ensure_ascii=False)
+
+
+def _parse_json_object(text: str) -> Optional[dict]:
+    """Best-effort JSON extraction: try whole string, then the first {...} block."""
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except (ValueError, TypeError):
+        pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def classify_agent_response(state: dict, agent_text: str) -> Dict[str, str]:
+    """LLM #2: classify the installation agent's message into SUCCESS / FAIL / QUESTION.
+
+    Always returns a dict with keys: label, question, next, reason.
+    On broken JSON / invalid routing it falls back to fail_node (safe default).
+    """
+    agent_text = (agent_text or "").strip()
+    if not agent_text:
+        return {
+            "label": "FAIL",
+            "question": "",
+            "next": "fail_node",
+            "reason": "Empty agent message - nothing to classify.",
+        }
+
+    prompt = CLASSIFY_PROMPT.format(
+        agent_text=agent_text[:4000],
+        state_snapshot=_state_snapshot(state),
+    )
+    try:
+        response = _llm().invoke(prompt)
+        raw = response.content if hasattr(response, "content") else str(response)
+        if isinstance(raw, list):
+            raw = " ".join(str(getattr(x, "text", x)) for x in raw)
+    except Exception as e:
+        return {
+            "label": "FAIL",
+            "question": "",
+            "next": "fail_node",
+            "reason": f"Classifier LLM call failed: {e}",
+        }
+
+    parsed = _parse_json_object(str(raw).strip())
+    if not isinstance(parsed, dict):
+        return {
+            "label": "FAIL",
+            "question": "",
+            "next": "fail_node",
+            "reason": "Classifier returned invalid JSON.",
+        }
+
+    label = str(parsed.get("label", "")).strip().upper()
+    nxt = str(parsed.get("next", "")).strip()
+    question = str(parsed.get("question", "")).strip()
+    reason = str(parsed.get("reason", "")).strip()
+
+    if label not in VALID_LABEL:
+        label = ""
+    if nxt not in VALID_NEXT:
+        nxt = LABEL_TO_NEXT.get(label, "")
+    if not nxt:
+        return {
+            "label": label or "FAIL",
+            "question": question,
+            "next": "fail_node",
+            "reason": reason or "Unrecognized label/next - defaulting to fail_node.",
+        }
+    if not label:
+        label = {v: k for k, v in LABEL_TO_NEXT.items()}.get(nxt, "QUESTION")
+
+    return {"label": label, "question": question, "next": nxt, "reason": reason}
+
+
 def _wants_boolean(question: str) -> bool:
     lower = (question or "").lower()
     return bool(re.search(r"true\s*/\s*false", lower)) or "(true/false)" in lower
@@ -140,23 +265,6 @@ def scan_app_files(app_path: str) -> Dict[str, Any]:
     }
     if not app_path or not os.path.isdir(app_path):
         return info
-
-    info["has_gradle"] = (
-        os.path.exists(os.path.join(app_path, "gradlew"))
-        or os.path.exists(os.path.join(app_path, "gradlew.bat"))
-    )
-
-    gradle_app = os.path.join(app_path, "app", "build.gradle")
-    if os.path.isfile(gradle_app):
-        try:
-            with open(gradle_app, encoding="utf-8") as f:
-                gradle_text = f.read()
-            info["appsflyer_sdk_installed"] = bool(re.search(r"appsflyer", gradle_text, re.I))
-            m = re.search(r'applicationId\s+"([^"]+)"', gradle_text)
-            if m:
-                info["package"] = m.group(1)
-        except OSError:
-            pass
 
     manifest = os.path.join(app_path, "app", "src", "main", "AndroidManifest.xml")
     if os.path.isfile(manifest):
