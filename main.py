@@ -10,6 +10,12 @@ import operator
 
 import subprocess
 
+import shutil
+
+from pathlib import Path
+
+from datetime import datetime
+
 from typing import TypedDict, List, Dict, Any, Annotated
 
 
@@ -249,6 +255,17 @@ def gradle_wrapper_cmd(app_path: str) -> str | None:
 
 
 
+def create_sandbox_app(original_app_path: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    sandbox_root = Path("sandboxes").resolve() / f"run_{timestamp}"
+    sandbox_app_path = sandbox_root / Path(original_app_path).name
+    def ignore_dirs(_, names):
+        return {
+            name for name in names
+            if name in {"build", ".gradle", ".git", "__pycache__", ".venv"}
+        }
+    shutil.copytree(original_app_path, sandbox_app_path, ignore=ignore_dirs)
+    return str(sandbox_app_path.resolve())
 
 
 def sdk_present_in_gradle(app_path: str) -> bool:
@@ -289,6 +306,10 @@ class AgentTestState(TypedDict):
 
     app_path: str
 
+    original_app_path: str
+
+    sandbox_path: str
+
     agent_mode: str
 
     mcp_triggered: bool
@@ -327,7 +348,7 @@ class AgentTestState(TypedDict):
 
 def setup_environment(state: AgentTestState):
 
-    print("[1] צומת: Setup Environment")
+    print("[1] node: Setup Environment")
 
     logs = []
 
@@ -337,6 +358,18 @@ def setup_environment(state: AgentTestState):
 
         logs.append({"node": "setup", "status": "FAIL", "reason": f"Path missing: {state['app_path']}"})
 
+        return {"nodes_logs": logs, "test_status": "FAIL"}
+
+    original_app_path = state["app_path"]
+
+    try:
+        sandbox_app_path = create_sandbox_app(original_app_path)
+    except Exception as exc:
+        logs.append({
+            "node": "setup",
+            "status": "FAIL",
+            "reason": f"Sandbox creation failed: {exc}",
+        })
         return {"nodes_logs": logs, "test_status": "FAIL"}
 
 
@@ -423,6 +456,12 @@ def setup_environment(state: AgentTestState):
 
         "mcp_tools_available": available_tools,
 
+        "original_app_path": original_app_path,
+
+        "app_path": sandbox_app_path,
+
+        "sandbox_path": sandbox_app_path,
+
     }
 
 
@@ -431,7 +470,7 @@ def setup_environment(state: AgentTestState):
 
 def run_agent_prompt(state: AgentTestState):
 
-    print("[2] צומת: Run Agent Prompt")
+    print("[2] node: Run Agent Prompt")
 
     logs = []
 
@@ -473,7 +512,7 @@ def run_agent_prompt(state: AgentTestState):
 
 def verify_mcp_activation(state: AgentTestState):
 
-    print("[3] צומת: Verify MCP Activation")
+    print("[3] node: Verify MCP Activation")
 
     logs = []
 
@@ -619,7 +658,7 @@ def apply_sdk_changes_node(state: AgentTestState):
 
 def check_compilation(state: AgentTestState):
 
-    print("[5] צומת: Check Compilation")
+    print("[5] node: Check Compilation")
 
     logs = []
 
@@ -641,6 +680,10 @@ def check_compilation(state: AgentTestState):
 
             text=True,
 
+            encoding="utf-8",
+
+            errors="replace",
+
             shell=os.name == "nt",
 
         )
@@ -653,9 +696,9 @@ def check_compilation(state: AgentTestState):
 
             "status": "SUCCESS" if success else "FAIL",
 
-            "stdout_tail": result.stdout[-500:],
+            "stdout_tail": (result.stdout or "")[-500:],
 
-            "stderr_tail": result.stderr[-500:],
+            "stderr_tail": (result.stderr or "")[-500:],
 
         })
 
@@ -697,7 +740,7 @@ def fail_node(state: AgentTestState):
 
 def end_report(state: AgentTestState):
 
-    print("[6] צומת: End Report")
+    print("[6] node: End Report")
 
     report = {
 
@@ -936,6 +979,10 @@ if __name__ == "__main__":
         "app_id": "appsflyer-demo-test",
 
         "app_path": os.path.abspath("./basic_app"),
+
+        "original_app_path": "",
+
+        "sandbox_path": "",
 
         "agent_mode": "GEMINI",
 

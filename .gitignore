@@ -1,1 +1,6 @@
 .env
+mcp_test_report.json
+sandboxes/
+.venv/
+__pycache__/
+*.pyc
