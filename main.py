@@ -10,9 +10,14 @@ import operator
 
 import subprocess
 
+import shutil
+
+from pathlib import Path
+
+from datetime import datetime
+
 from typing import TypedDict, List, Dict, Any, Annotated
 
-from responseAgent import answer_question_node
 
 from responseAgent import classify_question  # אם תרצי להשתמש בו לזיהוי
 
@@ -34,8 +39,6 @@ from mcp.client.stdio import stdio_client, get_default_environment
 
 from apply_sdk_changes import apply_sdk_changes
 from PromptsAgent import get_agent_prompt
-
-
 
 load_dotenv()
 
@@ -216,9 +219,6 @@ async def _call_mcp_tool_async(tool_name: str, args: dict) -> dict:
             }
 
 
-
-
-
 def call_mcp(tool_name: str, args: dict) -> dict:
 
     try:
@@ -238,6 +238,41 @@ def invoke_agent(prompt: str):
     return llm_with_tools.invoke(prompt)
 
 
+def agent_content_text(content) -> str:
+
+    if isinstance(content, str):
+
+        return content
+
+    if isinstance(content, list):
+
+        parts = []
+
+        for item in content:
+
+            if isinstance(item, dict):
+
+                parts.append(str(item.get("text") or item))
+
+            else:
+
+                parts.append(str(item))
+
+        return "\n".join(parts)
+
+    return str(content or "")
+
+
+def force_integrate_sdk_prompt(app_path: str) -> str:
+
+    return (
+        "Proceed without asking any clarification questions. "
+        "Call the AppsFlyer MCP tool integrateSdk now with exactly these arguments: "
+        "platform=android and useResponseListener=false. "
+        f"The Android project path is `{app_path}`."
+    )
+
+
 
 
 
@@ -255,6 +290,17 @@ def gradle_wrapper_cmd(app_path: str) -> str | None:
 
 
 
+def create_sandbox_app(original_app_path: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    sandbox_root = Path("sandboxes").resolve() / f"run_{timestamp}"
+    sandbox_app_path = sandbox_root / Path(original_app_path).name
+    def ignore_dirs(_, names):
+        return {
+            name for name in names
+            if name in {"build", ".gradle", ".git", "__pycache__", ".venv"}
+        }
+    shutil.copytree(original_app_path, sandbox_app_path, ignore=ignore_dirs)
+    return str(sandbox_app_path.resolve())
 
 
 def sdk_present_in_gradle(app_path: str) -> bool:
@@ -295,6 +341,10 @@ class AgentTestState(TypedDict):
 
     app_path: str
 
+    original_app_path: str
+
+    sandbox_path: str
+
     agent_mode: str
 
     mcp_triggered: bool
@@ -321,11 +371,6 @@ class AgentTestState(TypedDict):
 
     report_path: str
 
-    incoming_question: str
-
-    question_rounds: int
-
-    installation_answers: Annotated[List[Dict[str, Any]], operator.add]
 
     stream_decision: str
 
@@ -342,7 +387,7 @@ class AgentTestState(TypedDict):
 
 def setup_environment(state: AgentTestState):
 
-    print("[1] צומת: Setup Environment")
+    print("[1] node: Setup Environment")
 
     logs = []
 
@@ -352,6 +397,18 @@ def setup_environment(state: AgentTestState):
 
         logs.append({"node": "setup", "status": "FAIL", "reason": f"Path missing: {state['app_path']}"})
 
+        return {"nodes_logs": logs, "test_status": "FAIL"}
+
+    original_app_path = state["app_path"]
+
+    try:
+        sandbox_app_path = create_sandbox_app(original_app_path)
+    except Exception as exc:
+        logs.append({
+            "node": "setup",
+            "status": "FAIL",
+            "reason": f"Sandbox creation failed: {exc}",
+        })
         return {"nodes_logs": logs, "test_status": "FAIL"}
 
 
@@ -437,6 +494,12 @@ def setup_environment(state: AgentTestState):
         "mcp_tools_used": [mcp_tool_entry],
 
         "mcp_tools_available": available_tools,
+
+        "original_app_path": original_app_path,
+
+        "app_path": sandbox_app_path,
+
+        "sandbox_path": sandbox_app_path,
 
     }
 
@@ -575,10 +638,9 @@ def run_agent_prompt(state: AgentTestState):
 
 
 
-
 def verify_mcp_activation(state: AgentTestState):
 
-    print("[3] צומת: Verify MCP Activation")
+    print("[3] node: Verify MCP Activation")
 
     logs = []
 
@@ -724,7 +786,7 @@ def apply_sdk_changes_node(state: AgentTestState):
 
 def check_compilation(state: AgentTestState):
 
-    print("[5] צומת: Check Compilation")
+    print("[5] node: Check Compilation")
 
     logs = []
 
@@ -736,15 +798,29 @@ def check_compilation(state: AgentTestState):
 
     if gradlew:
 
+        gradle_user_home = Path(app_path) / ".gradle-user-home"
+
+        gradle_user_home.mkdir(parents=True, exist_ok=True)
+
+        gradle_env = os.environ.copy()
+
+        gradle_env["GRADLE_USER_HOME"] = str(gradle_user_home)
+
         result = subprocess.run(
 
-            [gradlew, "assembleDebug"],
+            [gradlew, "--no-daemon", "assembleDebug"],
 
             cwd=app_path,
 
             capture_output=True,
 
             text=True,
+
+            encoding="utf-8",
+
+            errors="replace",
+
+            env=gradle_env,
 
             shell=os.name == "nt",
 
@@ -758,9 +834,9 @@ def check_compilation(state: AgentTestState):
 
             "status": "SUCCESS" if success else "FAIL",
 
-            "stdout_tail": result.stdout[-500:],
+            "stdout_tail": (result.stdout or "")[-500:],
 
-            "stderr_tail": result.stderr[-500:],
+            "stderr_tail": (result.stderr or "")[-500:],
 
         })
 
@@ -802,7 +878,7 @@ def fail_node(state: AgentTestState):
 
 def end_report(state: AgentTestState):
 
-    print("[6] צומת: End Report")
+    print("[6] node: End Report")
 
     report = {
 
@@ -997,8 +1073,6 @@ workflow.add_node("stream_listen", stream_listen)
 
 workflow.add_node("run_agent_prompt", run_agent_prompt)
 
-workflow.add_node("answer_question", answer_question_node)
-
 workflow.add_node("verify_mcp_activation", verify_mcp_activation)
 
 workflow.add_node("apply_sdk_changes", apply_sdk_changes_node)
@@ -1022,8 +1096,6 @@ workflow.add_conditional_edges("setup_environment", route_after_setup)
 workflow.add_conditional_edges("stream_listen", route_after_stream)
 
 workflow.add_conditional_edges("run_agent_prompt", route_after_agent)
-
-workflow.add_conditional_edges("answer_question", route_after_answer)
 
 workflow.add_conditional_edges("verify_mcp_activation", route_after_mcp)
 
@@ -1064,6 +1136,10 @@ if __name__ == "__main__":
         "app_id": "appsflyer-demo-test",
 
         "app_path": os.path.abspath("./basic_app"),
+
+        "original_app_path": "",
+
+        "sandbox_path": "",
 
         "agent_mode": "GEMINI",
 
