@@ -35,8 +35,6 @@ from mcp.client.stdio import stdio_client, get_default_environment
 from apply_sdk_changes import apply_sdk_changes
 from PromptsAgent import get_agent_prompt
 
-
-
 load_dotenv()
 
 
@@ -216,9 +214,6 @@ async def _call_mcp_tool_async(tool_name: str, args: dict) -> dict:
             }
 
 
-
-
-
 def call_mcp(tool_name: str, args: dict) -> dict:
 
     try:
@@ -236,6 +231,41 @@ def call_mcp(tool_name: str, args: dict) -> dict:
 def invoke_agent(prompt: str):
 
     return llm_with_tools.invoke(prompt)
+
+
+def agent_content_text(content) -> str:
+
+    if isinstance(content, str):
+
+        return content
+
+    if isinstance(content, list):
+
+        parts = []
+
+        for item in content:
+
+            if isinstance(item, dict):
+
+                parts.append(str(item.get("text") or item))
+
+            else:
+
+                parts.append(str(item))
+
+        return "\n".join(parts)
+
+    return str(content or "")
+
+
+def force_integrate_sdk_prompt(app_path: str) -> str:
+
+    return (
+        "Proceed without asking any clarification questions. "
+        "Call the AppsFlyer MCP tool integrateSdk now with exactly these arguments: "
+        "platform=android and useResponseListener=false. "
+        f"The Android project path is `{app_path}`."
+    )
 
 
 
@@ -484,6 +514,36 @@ def run_agent_prompt(state: AgentTestState):
 
     has_tool_call = bool(resp.tool_calls)
 
+    if not has_tool_call:
+
+        question_text = agent_content_text(resp.content).strip()
+
+        retry_prompt = force_integrate_sdk_prompt(state["app_path"])
+
+        logs.append({
+
+            "node": "agent_prompt",
+
+            "status": "INFO",
+
+            "agent_mode": "GEMINI",
+
+            "message": "Agent asked a clarification question; retrying with default answer.",
+
+            "prompt_used": prompt,
+
+            "ide_question": question_text,
+
+            "default_answer": "useResponseListener=false",
+
+        })
+
+        prompt = retry_prompt
+
+        resp = invoke_agent(prompt)
+
+        has_tool_call = bool(resp.tool_calls)
+
 
 
     logs.append({
@@ -670,9 +730,17 @@ def check_compilation(state: AgentTestState):
 
     if gradlew:
 
+        gradle_user_home = Path(app_path) / ".gradle-user-home"
+
+        gradle_user_home.mkdir(parents=True, exist_ok=True)
+
+        gradle_env = os.environ.copy()
+
+        gradle_env["GRADLE_USER_HOME"] = str(gradle_user_home)
+
         result = subprocess.run(
 
-            [gradlew, "assembleDebug"],
+            [gradlew, "--no-daemon", "assembleDebug"],
 
             cwd=app_path,
 
@@ -683,6 +751,8 @@ def check_compilation(state: AgentTestState):
             encoding="utf-8",
 
             errors="replace",
+
+            env=gradle_env,
 
             shell=os.name == "nt",
 
