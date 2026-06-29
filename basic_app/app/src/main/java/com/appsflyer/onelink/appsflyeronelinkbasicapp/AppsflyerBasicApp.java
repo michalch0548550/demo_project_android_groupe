@@ -1,11 +1,6 @@
 package com.appsflyer.onelink.appsflyeronelinkbasicapp;
 
 import android.app.Application;
-import android.content.Intent;
-import android.util.Log;
-import com.google.gson.Gson;
-import org.json.JSONObject;
-import androidx.annotation.NonNull;
 
 import java.util.Map;
 import java.util.Objects;
@@ -17,5 +12,6 @@ public class AppsflyerBasicApp extends Application {
 
     public void onCreate() {
         super.onCreate();
+
     }
 }
