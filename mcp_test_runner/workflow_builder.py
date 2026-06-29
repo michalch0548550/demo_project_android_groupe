@@ -2,8 +2,8 @@ import os
 
 from langgraph.graph import END, StateGraph
 
-from test_state import AgentTestState
-from workflow_nodes import (
+from .test_state import AgentTestState
+from .workflow_nodes import (
     apply_sdk_changes_node,
     check_compilation,
     end_report,

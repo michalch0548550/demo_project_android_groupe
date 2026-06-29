@@ -2,7 +2,7 @@ import os
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from config import GEMINI_MODEL, INTEGRATE_SDK_TOOL
+from .config import GEMINI_MODEL, INTEGRATE_SDK_TOOL
 
 llm = ChatGoogleGenerativeAI(
     model=GEMINI_MODEL,

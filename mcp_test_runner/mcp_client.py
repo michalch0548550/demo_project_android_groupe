@@ -4,7 +4,7 @@ import os
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
 
-from config import DEFAULT_APP_ID
+from .config import DEFAULT_APP_ID
 
 
 def build_mcp_server_params() -> StdioServerParameters:

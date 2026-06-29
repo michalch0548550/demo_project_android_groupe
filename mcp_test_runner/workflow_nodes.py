@@ -1,13 +1,13 @@
 import json
 import os
 
-from agent_runner import agent_content_text, force_integrate_sdk_prompt, invoke_agent
-from android_project import create_sandbox_app, run_gradle_build, sdk_present_in_gradle
-from apply_sdk_changes import apply_sdk_changes
-from config import REPORT_FILE
-from mcp_client import call_mcp, list_mcp_tools
-from PromptsAgent import get_agent_prompt
-from test_state import AgentTestState
+from .agent_runner import agent_content_text, force_integrate_sdk_prompt, invoke_agent
+from .android_project import create_sandbox_app, run_gradle_build, sdk_present_in_gradle
+from .apply_sdk_changes import apply_sdk_changes
+from .config import REPORT_FILE
+from .mcp_client import call_mcp, list_mcp_tools
+from .prompts_agent import get_agent_prompt
+from .test_state import AgentTestState
 
 
 def setup_environment(state: AgentTestState):
