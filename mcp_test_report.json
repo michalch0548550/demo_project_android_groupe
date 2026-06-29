@@ -17,8 +17,8 @@
         {
             "tool": "integrateSdk",
             "args": {
-                "useResponseListener": false,
-                "platform": "android"
+                "platform": "android",
+                "useResponseListener": false
             },
             "phase": "agent_integration",
             "success": true,
@@ -114,7 +114,6 @@
     ],
     "files_modified_by_runner": true,
     "applied_files": [
-        "app/build.gradle",
         "app/src/main/java/com/appsflyer/onelink/appsflyeronelinkbasicapp/AppsflyerBasicApp.java"
     ],
     "detailed_steps": [
@@ -162,17 +161,16 @@
         {
             "node": "apply_sdk",
             "status": "SUCCESS",
-            "message": "Applied SDK integration to 2 file(s).",
+            "message": "Applied SDK integration to 1 file(s).",
             "applied_files": [
-                "app/build.gradle",
                 "app/src/main/java/com/appsflyer/onelink/appsflyeronelinkbasicapp/AppsflyerBasicApp.java"
             ]
         },
         {
             "node": "compilation",
             "status": "FAIL",
-            "stdout_tail": "Downloading https://services.gradle.org/distributions/gradle-8.13-bin.zip\n\n",
-            "stderr_tail": "Caused by: java.io.EOFException: SSL peer shut down incorrectly\n\tat java.base/sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:494)\n\tat java.base/sun.security.ssl.SSLSocketInputRecord.readHeader(SSLSocketInputRecord.java:483)\n\tat java.base/sun.security.ssl.SSLSocketInputRecord.decode(SSLSocketInputRecord.java:160)\n\tat java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:111)\n\tat java.base/sun.security.ssl.SSLSocketImpl.decode(SSLSocketImpl.java:1505)\n\t... 16 more\n"
+            "stdout_tail": " release:\n - Daemon JVM auto-provisioning\n - Enhancements for Scala plugin and JUnit testing\n - Improvements for build authors and plugin developers\n\nFor more details see https://docs.gradle.org/8.13/release-notes.html\n\nTo honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.\nDaemon will be stopped at the end of the build \n",
+            "stderr_tail": "kely cause the build to fail on Windows. Please move your project to a different directory. See http://b.android.com/95744 for details. This warning can be disabled by adding the line 'android.overridePathCheck=true' to gradle.properties file in the project directory.\n\n* Try:\n> Run with --stacktrace option to get the stack trace.\n> Run with --info or --debug option to get more log output.\n> Run with --scan to get full insights.\n> Get more help at https://help.gradle.org.\n\nBUILD FAILED in 5m 14s\n"
         },
         {
             "node": "final_status",
