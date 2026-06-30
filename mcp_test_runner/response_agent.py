@@ -12,16 +12,17 @@ messages never reach this node - only practical questions do.
 Fixed developer decisions for this project:
     - Platform:               Android
     - Deep Linking / OneLink: NO
-    - Response Listener:      YES (useResponseListener = True)
+    - Response Listener:      NO (useResponseListener = False)
     - Dev Key:                use the real DEV_KEY from .env
 """
+import json
 import os
 import re
-import json
 from typing import Any, Dict, List, Optional
 
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_QUESTION_ROUNDS = int(os.getenv("MAX_QUESTION_ROUNDS", "4"))
@@ -61,7 +62,7 @@ ANSWER_PROMPT = PromptTemplate.from_template(
     "Fixed developer decisions for this project:\n"
     "- Platform: Android\n"
     "- Deep Linking / OneLink: NO\n"
-    "- Response Listener: YES (useResponseListener = true)\n"
+    "- Response Listener: NO (useResponseListener = false)\n"
     "- Dev Key: use the real DEV_KEY from .env\n\n"
     "Question:\n{question}\n\n"
     "Project / environment context:\n{context}\n\n"
@@ -151,11 +152,7 @@ def _parse_json_object(text: str) -> Optional[dict]:
 
 
 def classify_agent_response(state: dict, agent_text: str) -> Dict[str, str]:
-    """LLM #2: classify the installation agent's message into SUCCESS / FAIL / QUESTION.
-
-    Always returns a dict with keys: label, question, next, reason.
-    On broken JSON / invalid routing it falls back to fail_node (safe default).
-    """
+    """LLM #2: classify the installation agent's message into SUCCESS / FAIL / QUESTION."""
     agent_text = (agent_text or "").strip()
     if not agent_text:
         return {
@@ -228,9 +225,9 @@ def _deterministic_answer(category: str, question: str) -> Optional[str]:
 
     if category == "response_listener":
         if _wants_boolean(question):
-            return "True"
+            return "False"
         return (
-            "Yes - enable the Response Listener (useResponseListener=true) "
+            "No - do not enable the Response Listener (useResponseListener=false) "
             "when initializing the AppsFlyer SDK on Android."
         )
 
@@ -277,9 +274,9 @@ def scan_app_files(app_path: str) -> Dict[str, Any]:
                 for name in ("ApplesActivity", "BananasActivity", "PeachesActivity", "FruitActivity")
             )
             if not info["package"]:
-                m = re.search(r'package="([^"]+)"', manifest_text)
-                if m:
-                    info["package"] = m.group(1)
+                match = re.search(r'package="([^"]+)"', manifest_text)
+                if match:
+                    info["package"] = match.group(1)
         except OSError:
             pass
 
@@ -312,7 +309,7 @@ def _project_context(state: dict) -> str:
         f"package: {scan['package']}" if scan.get("package") else "",
         f"dev_key_configured: {bool(dev_key)}",
         "deep_linking: disabled",
-        "response_listener: enabled",
+        "response_listener: disabled",
         f"appsflyer_sdk_installed: {scan['appsflyer_sdk_installed']}",
         f"application_class: {scan['application_class']}" if scan.get("application_class") else "",
         f"has_conversion_data_activity: {scan['has_conversion_data_activity']}",
@@ -361,11 +358,7 @@ def build_prompt_with_answers(base_prompt: str, installation_answers: List[Dict[
 
 
 def answer_question_node(state: dict) -> dict:
-    """LangGraph node: answer ONE practical installation question.
-
-    Reads the question from state["incoming_question"].
-    Does NOT filter / validate whether it is a practical question.
-    """
+    """LangGraph node: answer ONE practical installation question."""
     print("[2b] Node: Answer Practical Question")
     logs: List[Dict[str, Any]] = []
 

@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-load_dotenv()
+from .config import GEMINI_MODEL
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+load_dotenv()
 
 DEFAULT_FILES_TO_READ = [
     "app/build.gradle",

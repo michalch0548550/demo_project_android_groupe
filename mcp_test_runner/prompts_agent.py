@@ -10,15 +10,14 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+
 DEFAULT_GOAL = (
     "Install AppsFlyer's Android SDK in my app using the AppsFlyer MCP. "
     "The target platform is android and useResponseListener must be false."
 )
 
 llm = ChatGoogleGenerativeAI(
-    # model="gemma-4-26b-a4b-it",
     model="gemini-2.5-flash",
-    # temperature=0.4,
     temperature=0.1,
     google_api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
 )
