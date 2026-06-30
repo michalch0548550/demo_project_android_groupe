@@ -16,6 +16,8 @@ class AgentTestState(TypedDict):
     sdk_verified: bool
     test_status: str
     last_agent_message: Any
+    question_rounds: int
+    installation_answers: Annotated[List[Dict[str, Any]], operator.add]
     mcp_tools_used: Annotated[List[Dict[str, Any]], operator.add]
     mcp_tools_available: List[Dict[str, Any]]
     nodes_logs: Annotated[List[Dict[str, Any]], operator.add]

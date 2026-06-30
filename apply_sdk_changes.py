@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -101,6 +101,7 @@ def request_file_changes(
     app_path: str,
     dev_key: str,
     app_id: str,
+    llm_invoker: Optional[Callable[[str], Any]] = None,
 ) -> List[Dict[str, str]]:
     files_block = "\n\n".join(
         f"--- {rel_path} ---\n{content}" for rel_path, content in project_files.items()
@@ -113,11 +114,14 @@ def request_file_changes(
         files_block=files_block,
     )
 
-    llm = ChatGoogleGenerativeAI(
-        model=GEMINI_MODEL,
-        google_api_key=os.getenv("GEMINI_API_KEY"),
-    )
-    response = llm.invoke(prompt)
+    if llm_invoker:
+        response = llm_invoker(prompt)
+    else:
+        llm = ChatGoogleGenerativeAI(
+            model=GEMINI_MODEL,
+            google_api_key=os.getenv("GEMINI_API_KEY"),
+        )
+        response = llm.invoke(prompt)
     content = response.content if hasattr(response, "content") else str(response)
     raw_changes = _extract_json_array(content)
 
@@ -150,7 +154,7 @@ def apply_file_changes(app_path: str, changes: List[Dict[str, str]]) -> List[str
     return applied
 
 
-def apply_sdk_changes(state: dict) -> dict:
+def apply_sdk_changes(state: dict, llm_invoker: Optional[Callable[[str], Any]] = None) -> dict:
     """LangGraph node: translate MCP instructions into project file edits."""
     print("[4] Node: Apply SDK Changes")
     logs: List[Dict[str, Any]] = []
@@ -179,7 +183,9 @@ def apply_sdk_changes(state: dict) -> dict:
 
     try:
         project_files = collect_project_context(app_path)
-        changes = request_file_changes(mcp_text, project_files, app_path, dev_key, app_id)
+        changes = request_file_changes(
+            mcp_text, project_files, app_path, dev_key, app_id, llm_invoker=llm_invoker
+        )
         applied_files = apply_file_changes(app_path, changes)
     except Exception as exc:
         logs.append({

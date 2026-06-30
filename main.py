@@ -10,7 +10,6 @@ def main() -> None:
     print(f"\nTest finished. Status: {final_result['test_status']}")
     print(f"Report: {final_result['report_path']}")
     print_mcp_tools_summary(final_result)
-
-
+    
 if __name__ == "__main__":
     main()

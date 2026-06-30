@@ -20,25 +20,32 @@ def route_after_setup(state):
 
 
 def route_after_agent(state):
+    if state.get("test_status") == "FAIL":
+        return "fail_node"
     message = state.get("last_agent_message")
     return "verify_mcp_activation" if (message and message.tool_calls) else "fail_node"
 
 
 def route_after_mcp(state):
+    if state.get("test_status") == "FAIL":
+        return "fail_node"
     return "apply_sdk_changes" if state["mcp_triggered"] else "fail_node"
 
 
 def route_after_apply(state):
+    if state.get("test_status") == "FAIL":
+        return "fail_node"
     return "check_compilation" if state.get("files_modified") else "fail_node"
 
 
 def route_after_compilation(state):
+    if state.get("test_status") == "FAIL":
+        return "fail_node"
     return "pass_node" if state["compilation_passed"] else "fail_node"
 
 
 def build_workflow():
     workflow = StateGraph(AgentTestState)
-
     workflow.add_node("setup_environment", setup_environment)
     workflow.add_node("run_agent_prompt", run_agent_prompt)
     workflow.add_node("verify_mcp_activation", verify_mcp_activation)
@@ -80,6 +87,8 @@ def initial_state(app_path: str = "./basic_app") -> dict:
         "sdk_verified": False,
         "test_status": "UNKNOWN",
         "last_agent_message": None,
+        "question_rounds": 0,
+        "installation_answers": [],
         "mcp_tools_used": [],
         "mcp_tools_available": [],
         "nodes_logs": [],

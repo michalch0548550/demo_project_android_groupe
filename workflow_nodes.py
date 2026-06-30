@@ -1,10 +1,10 @@
 import json
 import os
 
-from agent_runner import agent_content_text, force_integrate_sdk_prompt, invoke_agent
 from android_project import create_sandbox_app, run_gradle_build, sdk_present_in_gradle
-from apply_sdk_changes import apply_sdk_changes
+from apply_sdk_changes import _extract_json_array, apply_sdk_changes, GEMINI_MODEL
 from config import REPORT_FILE
+from llm_listener import invoke_agent_with_listener, invoke_plain_llm_with_listener, listener_on_text
 from mcp_client import call_mcp, list_mcp_tools
 from PromptsAgent import get_agent_prompt
 from test_state import AgentTestState
@@ -84,37 +84,47 @@ def run_agent_prompt(state: AgentTestState):
     print("[2] node: Run Agent Prompt")
     logs = []
 
-    prompt = get_agent_prompt(state["app_path"])
-    response = invoke_agent(prompt)
-    has_tool_call = bool(response.tool_calls)
+    base_prompt = get_agent_prompt(state["app_path"])
+    response, listener_updates = invoke_agent_with_listener(
+        state, base_prompt, "run_agent_prompt"
+    )
+    logs.extend(listener_updates.get("nodes_logs", []))
 
-    if not has_tool_call:
-        question_text = agent_content_text(response.content).strip()
-        retry_prompt = force_integrate_sdk_prompt(state["app_path"])
+    if listener_updates.get("test_status") == "FAIL":
         logs.append({
             "node": "agent_prompt",
-            "status": "INFO",
+            "status": "FAIL",
             "agent_mode": "GEMINI",
-            "message": "Agent asked a clarification question; retrying with default answer.",
-            "prompt_used": prompt,
-            "ide_question": question_text,
-            "default_answer": "useResponseListener=false",
+            "message": "Listener classified agent response as failure.",
+            "prompt_used": base_prompt,
         })
+        return {
+            "last_agent_message": response,
+            "nodes_logs": logs,
+            "agent_mode": "GEMINI",
+            "test_status": "FAIL",
+            "question_rounds": listener_updates.get("question_rounds", state.get("question_rounds", 0)),
+            "installation_answers": listener_updates.get("installation_answers", []),
+        }
 
-        prompt = retry_prompt
-        response = invoke_agent(prompt)
-        has_tool_call = bool(response.tool_calls)
-
+    has_tool_call = bool(response and response.tool_calls)
     logs.append({
         "node": "agent_prompt",
         "status": "SUCCESS" if has_tool_call else "FAIL",
         "agent_mode": "GEMINI",
         "message": f"Tool calls detected: {has_tool_call}",
-        "prompt_used": prompt,
-        "ai_content": response.content,
+        "prompt_used": base_prompt,
+        "ai_content": response.content if response else None,
     })
 
-    return {"last_agent_message": response, "nodes_logs": logs, "agent_mode": "GEMINI"}
+    result = {
+        "last_agent_message": response,
+        "nodes_logs": logs,
+        "agent_mode": "GEMINI",
+        "question_rounds": listener_updates.get("question_rounds", state.get("question_rounds", 0)),
+        "installation_answers": listener_updates.get("installation_answers", []),
+    }
+    return result
 
 
 def verify_mcp_activation(state: AgentTestState):
@@ -135,6 +145,18 @@ def verify_mcp_activation(state: AgentTestState):
 
     mcp_result = call_mcp(tool["name"], tool_args)
     mcp_text = mcp_result.get("text") or ""
+    listener_logs = []
+    _, listener_updates = listener_on_text(state, "verify_mcp_activation", mcp_text)
+    listener_logs.extend(listener_updates.get("nodes_logs", []))
+    if listener_updates.get("test_status") == "FAIL":
+        return {
+            "mcp_triggered": False,
+            "nodes_logs": logs + listener_logs,
+            "test_status": "FAIL",
+            "question_rounds": listener_updates.get("question_rounds", state.get("question_rounds", 0)),
+            "installation_answers": listener_updates.get("installation_answers", []),
+        }
+
     mcp_tool_entry = {
         "tool": tool["name"],
         "args": tool_args,
@@ -150,7 +172,7 @@ def verify_mcp_activation(state: AgentTestState):
             "status": "FAIL",
             "reason": f"MCP execution failed: {mcp_result.get('error')}",
         })
-        return {"mcp_triggered": False, "nodes_logs": logs, "mcp_tools_used": [mcp_tool_entry]}
+        return {"mcp_triggered": False, "nodes_logs": logs + listener_logs, "mcp_tools_used": [mcp_tool_entry]}
 
     if mcp_result.get("is_error"):
         logs.append({
@@ -159,7 +181,7 @@ def verify_mcp_activation(state: AgentTestState):
             "reason": "MCP returned error response.",
             "mcp_output_preview": mcp_text[:500],
         })
-        return {"mcp_triggered": False, "nodes_logs": logs, "mcp_tools_used": [mcp_tool_entry]}
+        return {"mcp_triggered": False, "nodes_logs": logs + listener_logs, "mcp_tools_used": [mcp_tool_entry]}
 
     logs.append({
         "node": "verify_mcp",
@@ -172,13 +194,70 @@ def verify_mcp_activation(state: AgentTestState):
     return {
         "mcp_triggered": True,
         "mcp_integration_text": mcp_text,
-        "nodes_logs": logs,
+        "nodes_logs": logs + listener_logs,
         "mcp_tools_used": [mcp_tool_entry],
+        "question_rounds": listener_updates.get("question_rounds", state.get("question_rounds", 0)),
+        "installation_answers": listener_updates.get("installation_answers", []),
     }
 
 
 def apply_sdk_changes_node(state: AgentTestState):
-    result = apply_sdk_changes(state)
+    from dotenv import load_dotenv
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    load_dotenv()
+    llm = ChatGoogleGenerativeAI(
+        model=GEMINI_MODEL,
+        google_api_key=os.getenv("GEMINI_API_KEY"),
+    )
+    listener_holder: dict = {"updates": {}}
+    working_state = dict(state)
+
+    def llm_invoker(prompt: str):
+        def is_done(response) -> bool:
+            content = response.content if hasattr(response, "content") else str(response)
+            try:
+                _extract_json_array(content)
+                return True
+            except ValueError:
+                return False
+
+        response, updates = invoke_plain_llm_with_listener(
+            working_state,
+            prompt,
+            "apply_sdk_changes",
+            llm.invoke,
+            is_done=is_done,
+        )
+        listener_holder["updates"] = updates
+        working_state["question_rounds"] = updates.get(
+            "question_rounds", working_state.get("question_rounds", 0)
+        )
+        if updates.get("test_status") == "FAIL":
+            raise ValueError("LISTENER_FAIL")
+        return response
+
+    try:
+        result = apply_sdk_changes(state, llm_invoker=llm_invoker)
+    except ValueError as exc:
+        if str(exc) != "LISTENER_FAIL":
+            raise
+        result = {
+            "files_modified": False,
+            "applied_files": [],
+            "nodes_logs": [],
+            "test_status": "FAIL",
+        }
+
+    listener_updates = listener_holder.get("updates", {})
+    result["nodes_logs"] = listener_updates.get("nodes_logs", []) + result.get("nodes_logs", [])
+    if listener_updates.get("test_status") == "FAIL":
+        result["test_status"] = "FAIL"
+    if "question_rounds" in listener_updates:
+        result["question_rounds"] = listener_updates["question_rounds"]
+    if listener_updates.get("installation_answers"):
+        result["installation_answers"] = listener_updates["installation_answers"]
+
     sdk_verified = sdk_present_in_gradle(state["app_path"]) if result.get("files_modified") else False
     result["sdk_verified"] = sdk_verified
 
@@ -195,7 +274,21 @@ def apply_sdk_changes_node(state: AgentTestState):
 def check_compilation(state: AgentTestState):
     print("[5] node: Check Compilation")
     success, log = run_gradle_build(state["app_path"])
-    return {"compilation_passed": success, "nodes_logs": [log]}
+    logs = [log]
+    result: dict = {"compilation_passed": success, "nodes_logs": logs}
+
+    build_text = ((log.get("stderr_tail") or "") + "\n" + (log.get("stdout_tail") or "")).strip()
+    if build_text:
+        _, listener_updates = listener_on_text(state, "check_compilation", build_text)
+        logs.extend(listener_updates.get("nodes_logs", []))
+        if listener_updates.get("test_status") == "FAIL":
+            result["test_status"] = "FAIL"
+        if "question_rounds" in listener_updates:
+            result["question_rounds"] = listener_updates["question_rounds"]
+        if listener_updates.get("installation_answers"):
+            result["installation_answers"] = listener_updates["installation_answers"]
+
+    return result
 
 
 def pass_node(state: AgentTestState):
